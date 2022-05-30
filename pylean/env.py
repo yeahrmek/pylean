@@ -26,10 +26,8 @@ class LeanEnv(LeanInstance, Env):
 
     def __init__(self, *args, decl: Optional[str] = None, **kwargs) -> None:
         super().__init__(*args, **kwargs)
+        self._reset_params()
         self.decl = decl
-        self.search_id = None
-        self._init_obs = (-1, '')
-        self._init_info = None
 
     def step(self, action: Tuple[int, str]) -> dict:
         """
@@ -97,10 +95,8 @@ class LeanEnv(LeanInstance, Env):
             raise ValueError('Declaration name is not provided.')
 
         if options:
+            self._reset_params()
             self.decl = options['decl']
-            self.search_id = None
-            self._init_obs = (-1, '')
-            self._init_info = None
 
         if self.search_id is None or self._init_obs[0] == -1:
             info = self.init_search(self.decl)
@@ -120,5 +116,23 @@ class LeanEnv(LeanInstance, Env):
         """
         Perform any necessary cleanup
         """
+        self._reset_params()
         self.kill()
+
+    def clear_search(self):
+        """
+        Clear proof search state
+        """
+        super().clear_search(self.search_id)
+        self._reset_params()
+
+    def _reset_params(self):
+        """
+        Reset some internal parameters to empty values
+        """
+        self.search_id = None
+        self.decl = None
+        self._init_obs = (-1, '')
+        self._init_info
+
 
