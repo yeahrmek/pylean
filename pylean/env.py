@@ -29,6 +29,8 @@ class LeanEnv(LeanInstance, Env):
         super().__init__(*args, **kwargs)
         self.decl = decl
         self.search_id = None
+        self._init_obs = (-1, '')
+        self._init_info = None
 
     def step(self, action: Tuple[int, str]) -> dict:
         """
@@ -60,7 +62,7 @@ class LeanEnv(LeanInstance, Env):
         info = super().run_stmt(self.search_id, state_id, tactic)
         observation, reward, done = (-1, ''), 0, False
         if info['error'] is None:
-            observation = (info['tactic_state_id'], info['tactic_state'])
+            observation = (int(info['tactic_state_id']), info['tactic_state'])
             reward = float(info['tactic_state'] == "no goals")
             done = info['tactic_state'] == "no goals"
         return observation, reward, done, info
@@ -73,7 +75,7 @@ class LeanEnv(LeanInstance, Env):
         options: Optional[dict] = None,
     ) -> Union[str, Tuple[str, dict]]:
         """
-        Reset the environment to an initial state and returns initial observation
+        Returns initial observation
 
         Args:
         ----
@@ -89,18 +91,19 @@ class LeanEnv(LeanInstance, Env):
                 Does not take effect currently.
                 In future it can be used to initialize env with different theorems.
         """
-        if self.search_id is not None:
-            self.clear_search(self.search_id)
-        info = self.init_search(self.decl)
-        self.search_id = None
-        observation = (-1, '')
-        if info['error'] is None:
-            observation = (int(info['tactic_state_id']), info['tactic_state'])
-            self.search_id = int(info['search_id'])
+        if self.search_id is None or self._init_obs[0] == -1:
+            info = self.init_search(self.decl)
+            if info['error'] is None:
+                self._init_obs = (int(info['tactic_state_id']), info['tactic_state'])
+                self.search_id = int(info['search_id'])
+                self._init_info = info
+            else:
+                self._init_obs = (-1, '')
+                self._init_info = info
 
         if return_info:
-            return observation, info
-        return observation
+            return self._init_obs, self._init_info
+        return self._init_obs
 
     def close(self):
         """
