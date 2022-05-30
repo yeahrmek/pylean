@@ -25,7 +25,6 @@ class LeanEnv(LeanInstance, Env):
     reward_range = (0.0, 1.0)
 
     def __init__(self, *args, decl: Optional[str] = None, **kwargs) -> None:
-        assert decl is not None, "Declaration is not provided."
         super().__init__(*args, **kwargs)
         self.decl = decl
         self.search_id = None
@@ -88,9 +87,21 @@ class LeanEnv(LeanInstance, Env):
 
             options : Optional[dict], default=None
                 Additional options to initialize environment with.
-                Does not take effect currently.
-                In future it can be used to initialize env with different theorems.
+                It should contain `decl` key with theorem declaration as a value
+
+        Returns:
+        --------
+
         """
+        if (self.decl is None and options is None) or (options and not 'decl' in options):
+            raise ValueError('Declaration name is not provided.')
+
+        if options:
+            self.decl = options['decl']
+            self.search_id = None
+            self._init_obs = (-1, '')
+            self._init_info = None
+
         if self.search_id is None or self._init_obs[0] == -1:
             info = self.init_search(self.decl)
             if info['error'] is None:
