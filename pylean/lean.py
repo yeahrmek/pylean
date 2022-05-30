@@ -13,7 +13,7 @@ class LeanException(Exception):
 class LeanInstance(threading.Thread):
     """
     """
-    def __init__(self, lean_gym_path: str, timeout: int = 10,
+    def __init__(self, lean_gym_path: str, timeout: int = 120,
                  verbose: int = 0) -> None:
         self.lean_gym_path = lean_gym_path
         self.command = ['lean', '--run', 'src/repl.lean']
