@@ -133,6 +133,4 @@ class LeanEnv(LeanInstance, Env):
         self.search_id = None
         self.decl = None
         self._init_obs = (-1, '')
-        self._init_info
-
-
+        self._init_info = None

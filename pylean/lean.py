@@ -3,7 +3,7 @@ import subprocess
 import queue
 import json
 
-from typing import Optional
+from typing import Optional, List
 
 
 class LeanException(Exception):
@@ -82,8 +82,8 @@ class LeanInstance(threading.Thread):
         self.update_proof_search(search_id, state_id, tactic, results)
         return results
 
-    def run_batch(self, search_ids: list[int], state_ids: list[int],
-                  tactics: list[str]) -> dict:
+    def run_batch(self, search_ids: List[int], state_ids: List[int],
+                  tactics: List[str]) -> dict:
         """
         Run a batch of given tactics. We can do it only if
         all search_ids are different. Can't parallelize tactics
