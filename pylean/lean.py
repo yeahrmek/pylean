@@ -46,7 +46,10 @@ class LeanInstance(threading.Thread):
         Initialize lean for the given declaration of the statement
         """
         self._send_flush(f'["init_search", ["{decl}", ""]]\n')
-        result = self.get_result()
+        msg = self._get_message(self.timeout)
+        while 'warning:' in msg:
+            msg = self._get_message(self.timeout)
+        result = json.loads(msg)
         # {"error":null,
         #  "proof_steps":[],
         #  "search_id":"0",
@@ -119,13 +122,8 @@ class LeanInstance(threading.Thread):
         return self.get_result()
 
     def get_result(self, timeout: Optional[int] = None) -> dict:
-        timeout = timeout if timeout else self.timeout
-        try:
-            msg = self.message_queue.get(timeout=self.timeout)
-            assert msg is not None
-            return json.loads(msg)
-        except queue.Empty:
-            print("Command timed out! Interrupting")
+        msg = self._get_message(timeout)
+        return json.loads(msg)
 
     def get_tactic_state(self, search_id: int, state_id: int) -> dict:
         return self.proof_searchs[search_id]['states'][state_id]
@@ -174,3 +172,11 @@ class LeanInstance(threading.Thread):
         self._proc.terminate()
         self._proc.kill()
         self.__sema.release()
+
+    def _get_message(self, timeout: float) -> str:
+        timeout = timeout if timeout else self.timeout
+        try:
+            msg = self.message_queue.get(timeout=timeout)
+            return msg
+        except queue.Empty:
+            print("Command timed out!")
