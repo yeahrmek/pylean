@@ -50,11 +50,7 @@ class LeanInstance(threading.Thread):
         while 'warning:' in msg:
             msg = self._get_message(self.timeout)
         result = json.loads(msg)
-        # {"error":null,
-        #  "proof_steps":[],
-        #  "search_id":"0",
-        #  "tactic_state":"⊢ ∀ {m n : ℤ} {p : ℕ}, nat.prime p → ↑p ∣ <...>,
-        #  "tactic_state_id":"0"}
+
         if result['error'] is None:
             search_id = int(result['search_id'])
             tactic_state_id = int(result['tactic_state_id'])
@@ -64,7 +60,7 @@ class LeanInstance(threading.Thread):
                     tactic_state_id: {
                         'id_prev': None,
                         'id_next': None,
-                        'state_after': result['tactic_state'],
+                        'state': result['tactic_state'],
                         'tactic': None
                     }
                 },
@@ -136,14 +132,14 @@ class LeanInstance(threading.Thread):
                             tactic: str, result: dict) -> None:
         if result['error'] is None:
             state_id = int(result['tactic_state_id'])
+            self.proof_searchs[search_id]['states'][state_id_previous]['tactic'] = tactic
+            self.proof_searchs[search_id]['states'][state_id_previous]['id_next'] = state_id
             self.proof_searchs[search_id]['states'][state_id] = {
                 'id_prev': state_id_previous,
                 'id_next': None,
-                'state_after': result['tactic_state'],
-                'tactic': tactic
+                'state': result['tactic_state'],
+                'tactic': None
             }
-            self.proof_searchs[search_id]['states']\
-                [state_id_previous]['id_next'] = state_id
         else:
             self.proof_searchs[search_id]['n_failed_tactics'] += 1
         self.proof_searchs[search_id]['n_total_tactics'] += 1

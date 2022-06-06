@@ -56,12 +56,29 @@ class LeanEnv(LeanInstance, Env):
                 (error, search_id, tactic_state_id, tactic_state, proof_steps)
         """
         state_id, tactic = action
-        info = super().run_stmt(self.search_id, state_id, tactic)
-        observation, reward, done = (-1, ''), 0, False
-        if info['error'] is None:
-            observation = (int(info['tactic_state_id']), info['tactic_state'])
-            reward = float(info['tactic_state'] == "no goals")
-            done = info['tactic_state'] == "no goals"
+
+        # # check whether such action has already been performed
+        search = self.proof_searchs[self.search_id]
+        if state_id in search['states'] and \
+            search['states'][state_id]['tactic'] == tactic:
+                id_next = search['states'][state_id]['id_next']
+                observation = (id_next, search['states'][id_next]['state'])
+                reward = float(observation[1] == "no goals")
+                done = float(observation[1] == "no goals")
+                info = {
+                    'error': None,
+                    'search_id': self.search_id,
+                    'tactic_state': observation[1],
+                    'tactic_state_id': observation[0]
+                }
+        else:
+            info = super().run_stmt(self.search_id, state_id, tactic)
+            observation, reward, done = (-1, ''), 0, False
+            if info['error'] is None:
+                observation = (int(info['tactic_state_id']), info['tactic_state'])
+                reward = float(info['tactic_state'] == "no goals")
+                done = info['tactic_state'] == "no goals"
+
         return observation, reward, done, info
 
     def reset(
