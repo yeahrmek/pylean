@@ -186,15 +186,16 @@ class VectorizedLeanEnv(LeanEnv):
     def step(
         self,
         actions_list: List[Tuple[int, int, str]]
-    ) -> Tuple[List[Tuple[int, str]], List[float], List[bool], List[dict]]:
+    ) -> Tuple[List[Tuple[int, int, str]], List[float], List[bool], List[dict]]:
         """
         Run given tactic for a given search at given state
 
         Args:
         -----
-            actions : List[Tuple[int, str]]
-                State id and tactic to apply for each statement.
-                List length should be equal to the length of the `decls_list`
+            actions : List[Tuple[int, int, str]]
+                search_id, state id and tactic to apply for each statement.
+                List length should be equal to the length of the `decls_list`.
+                Note, that all search ids should be different.
 
         Returns:
         --------
@@ -213,13 +214,18 @@ class VectorizedLeanEnv(LeanEnv):
                 Dictionary with additional info
                 (error, search_id, tactic_state_id, tactic_state, proof_steps)
         """
+        search_id_list, state_id_list, tactic_list = zip(*actions_list)
+
+        assert len(set(search_id_list)) == len(search_id_list), 'Duplicate search_ids found.'
+        assert all([s_id in self.search_id_list for s_id in search_id_list])
+
         observations, rewards, dones, infos = [], [], [], []
 
         run_indices = []
         # check whether such action has already been performed
-        for i, (search_id, action) in enumerate(zip(self.search_id_list, actions_list)):
+        for i, (search_id, state_id, tactic) in enumerate(actions_list):
             obs_cur, reward_cur, done_cur, info_cur = self._observation_from_cache(
-                search_id, *action)
+                search_id, state_id, tactic)
             observations.append(obs_cur)
             rewards.append(reward_cur)
             dones.append(done_cur)
@@ -227,17 +233,17 @@ class VectorizedLeanEnv(LeanEnv):
             if obs_cur is None:
                 run_indices.append(i)
 
-        run_search_ids = [self.search_id_list[i] for i in run_indices]
-        run_state_ids = [actions_list[i][0] for i in run_indices]
-        run_tactics = [actions_list[i][1] for i in run_indices]
+        run_search_ids = [search_id_list[i] for i in run_indices]
+        run_state_ids = [state_id_list[i] for i in run_indices]
+        run_tactics = [tactic_list[i] for i in run_indices]
 
         output = self.run_batch(run_search_ids, run_state_ids, run_tactics)
 
         for i, search_id in zip(run_indices, run_search_ids):
-            observations[i], rewards[i], dones[i] = (-1, ''), 0, False
+            observations[i], rewards[i], dones[i] = (search_id, -1, ''), 0, False
             infos[i] = output[search_id]
             if infos[i]['error'] is None:
-                observations[i] = (int(infos[i]['tactic_state_id']), infos[i]['tactic_state'])
+                observations[i] = (search_id, int(infos[i]['tactic_state_id']), infos[i]['tactic_state'])
                 rewards[i] = float(infos[i]['tactic_state'] == "no goals")
                 dones[i] = infos[i]['tactic_state'] == "no goals"
 
@@ -284,11 +290,12 @@ class VectorizedLeanEnv(LeanEnv):
             for decl in self.decls_list:
                 info = self.init_search(decl)
                 if info['error'] is None:
-                    self._init_obs.append((int(info['tactic_state_id']), info['tactic_state']))
-                    self.search_id_list.append(int(info['search_id']))
+                    search_id = int(info['search_id'])
+                    self._init_obs.append((search_id, int(info['tactic_state_id']), info['tactic_state']))
+                    self.search_id_list.append(search_id)
                     self._init_info.append(info)
                 else:
-                    self._init_obs.append((-1, ''))
+                    self._init_obs.append((-1, -1, ''))
                     self._init_info.append(info)
                     self.search_id_list.append(None)
 
@@ -308,5 +315,17 @@ class VectorizedLeanEnv(LeanEnv):
     def _reset_params(self):
         self.search_id_list = None
         self.decls_list = None
-        self._init_obs = [(-1, '')]
+        self._init_obs = [(-1, -1, '')]
         self._init_info = None
+
+    def _observation_from_cache(
+        self,
+        search_id: int,
+        state_id: int,
+        tactic: str
+    ) -> Tuple[Tuple[int, int, str], float, bool, dict]:
+        observation, reward, done, info = super()._observation_from_cache(
+            search_id, state_id, tactic)
+        if observation is not None:
+            observation = (search_id, *observation)
+        return observation, reward, done, info
