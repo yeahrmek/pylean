@@ -8,7 +8,4 @@ setup(
     description="Python wrapper for lean-gym",
     packages=["pylean"],
     python_requires=">=3.6",
-    install_requires=[
-
-    ]
 )

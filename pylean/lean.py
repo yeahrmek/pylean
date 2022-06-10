@@ -98,7 +98,7 @@ class LeanInstance(threading.Thread):
             ids_map[s_id] = (int(tac_id), tac)
             cmd = f'["run_tac",["{s_id}","{tac_id}","{tac}"]]\n'
             self._send_flush(cmd)
-        output = {}
+        output = {s_id: None for s_id in ids_map}
         for _ in range(len(search_ids)):
             result = self.get_result()
             if result['search_id'] is not None:
@@ -106,7 +106,7 @@ class LeanInstance(threading.Thread):
                 state_id_before, tactic = ids_map[search_id]
                 self.update_proof_search(search_id, state_id_before, tactic, result)
                 del ids_map[search_id]
-            output[result['search_id']] = result
+                output[search_id] = result
         for search_id in ids_map:
             self.proof_searchs[search_id]['n_failed_tactics'] += 1
             self.proof_searchs[search_id]['n_total_tactics'] += 1
