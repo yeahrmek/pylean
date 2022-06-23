@@ -13,7 +13,7 @@ class LeanException(Exception):
 class LeanInstance(threading.Thread):
     """
     """
-    def __init__(self, lean_gym_path: str, timeout: int = 120,
+    def __init__(self, lean_gym_path: str, timeout: int = 180,
                  verbose: int = 0) -> None:
         self.lean_gym_path = lean_gym_path
         self.command = ['lean', '--run', 'src/repl.lean']
@@ -33,6 +33,7 @@ class LeanInstance(threading.Thread):
 
         self.proof_searchs = {}  # search_id -> dict(state_id -> proof_context)
         self.statistics = {}
+        self._hist = set()
 
         # Set up the message queue, which we'll populate with the
         # messages from lean-gym.
@@ -46,10 +47,16 @@ class LeanInstance(threading.Thread):
         Initialize lean for the given declaration of the statement
         """
         self._send_flush(f'["init_search", ["{decl}", ""]]\n')
-        msg = self._get_message(self.timeout)
-        while 'warning:' in msg:
-            msg = self._get_message(self.timeout)
-        result = json.loads(msg)
+        msg = [self._get_message(self.timeout)]
+        while 'warning:' in msg[-1]:
+            msg.append(self._get_message(self.timeout))
+        result = json.loads(msg[-1])
+
+        if result['error'] is None and result['tactic_state_id'] is None:
+            print('Repeating init_search...')
+            self._send_flush(f'["init_search", ["{decl}", ""]]\n')
+            msg.append(self._get_message(self.timeout))
+            result = json.loads(msg[-1])
 
         if result['error'] is None:
             search_id = int(result['search_id'])
@@ -58,10 +65,9 @@ class LeanInstance(threading.Thread):
                 'decl': decl,
                 'states': {
                     tactic_state_id: {
-                        'id_prev': None,
-                        'id_next': None,
+                        'id_prev': [],
                         'state': result['tactic_state'],
-                        'tactic': None
+                        'tactic_to_next_id': {}
                     }
                 },
                 'n_failed_tactics': 0,
@@ -75,6 +81,9 @@ class LeanInstance(threading.Thread):
         Run given tactic for a given search at given state
         """
         cmd = f'["run_tac",["{search_id}","{state_id}","{tactic}"]]\n'
+
+        if (search_id, state_id, tactic) in self._hist:
+            return self._cached_result(search_id, state_id, tactic)
 
         self._send_flush(cmd)
         results = self.get_result()
@@ -132,17 +141,38 @@ class LeanInstance(threading.Thread):
                             tactic: str, result: dict) -> None:
         if result['error'] is None:
             state_id = int(result['tactic_state_id'])
-            self.proof_searchs[search_id]['states'][state_id_previous]['tactic'] = tactic
-            self.proof_searchs[search_id]['states'][state_id_previous]['id_next'] = state_id
-            self.proof_searchs[search_id]['states'][state_id] = {
-                'id_prev': state_id_previous,
-                'id_next': None,
-                'state': result['tactic_state'],
-                'tactic': None
-            }
+
+            states = self.proof_searchs[search_id]['states']
+
+            states[state_id_previous]['tactic_to_next_id'][tactic] = state_id
+
+            if not state_id in states:
+                states[state_id] = {
+                    'id_prev': [state_id_previous],
+                    'tactic_to_next_id': {}
+                }
+            else:
+                states[state_id]['id_prev'].append(state_id_previous)
+            states[state_id]['state'] = result['tactic_state']
+            self._hist.add((search_id, state_id_previous, tactic))
         else:
             self.proof_searchs[search_id]['n_failed_tactics'] += 1
         self.proof_searchs[search_id]['n_total_tactics'] += 1
+
+    def _cached_result(self, search_id: int, state_id: int, tactic: int) -> dict:
+        assert (search_id, state_id, tactic) in self._hist
+
+        states = self.proof_searchs[search_id]['states']
+        id_next = states[state_id]['tactic_to_next_id'][tactic]
+        result = {
+            'error': None,
+            'search_id': search_id,
+            'tactic_state': states[id_next]['state'],
+            'tactic_state_id': id_next
+        }
+        return result
+
+
 
     def _send_flush(self, cmd: str) -> None:
         assert self._fin
@@ -176,3 +206,4 @@ class LeanInstance(threading.Thread):
             return msg
         except queue.Empty:
             print("Command timed out!")
+            raise

@@ -59,14 +59,11 @@ class LeanEnv(LeanInstance, Env):
         """
         state_id, tactic = action
 
-        # # check whether such action has already been performed
-        observation, reward, done, info = self._observation_from_cache(
+        observation, reward, done, info = self._observation_from_run_stmt(
             self.search_id, state_id, tactic)
-        if observation is None:
-            observation, reward, done, info = self._observation_from_run_stmt(
-                self.search_id, state_id, tactic)
 
         return observation, reward, done, info
+
 
     def reset(
         self,
@@ -128,7 +125,8 @@ class LeanEnv(LeanInstance, Env):
         Clear proof search state
         """
         decl = self.decl
-        super().clear_search(self.search_id)
+        if self.search_id is not None:
+            super().clear_search(self.search_id)
         self._reset_params()
         self.decl = decl
 
@@ -140,28 +138,6 @@ class LeanEnv(LeanInstance, Env):
         self.decl = None
         self._init_obs = (-1, '')
         self._init_info = None
-
-    def _observation_from_cache(
-        self,
-        search_id: int,
-        state_id: int,
-        tactic: str
-    ) -> Tuple[Tuple[int, str], float, bool, dict]:
-        search = self.proof_searchs[search_id]
-        observation, reward, done, info = None, None, None, None
-        if state_id in search['states'] and \
-            search['states'][state_id]['tactic'] == tactic:
-                id_next = search['states'][state_id]['id_next']
-                observation = (id_next, search['states'][id_next]['state'])
-                reward = float(observation[1] == "no goals")
-                done = float(observation[1] == "no goals")
-                info = {
-                    'error': None,
-                    'search_id': search_id,
-                    'tactic_state': observation[1],
-                    'tactic_state_id': observation[0]
-                }
-        return observation, reward, done, info
 
     def _observation_from_run_stmt(self,
         search_id: int,
