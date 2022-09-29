@@ -125,10 +125,12 @@ class LeanEnv(LeanInstance, Env):
         Clear proof search state
         """
         decl = self.decl
+        out = None
         if self.search_id is not None:
-            super().clear_search(self.search_id)
+            out = super().clear_search(self.search_id)
         self._reset_params()
         self.decl = decl
+        return out
 
     def _reset_params(self):
         """

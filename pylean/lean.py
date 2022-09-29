@@ -13,7 +13,7 @@ class LeanException(Exception):
 class LeanInstance(threading.Thread):
     """
     """
-    def __init__(self, lean_gym_path: str, timeout: int = 180,
+    def __init__(self, lean_gym_path: str, timeout: int = 300,
                  verbose: int = 0) -> None:
         self.lean_gym_path = lean_gym_path
         self.command = ['lean', '--run', 'src/repl.lean']
@@ -52,11 +52,11 @@ class LeanInstance(threading.Thread):
             msg.append(self._get_message(self.timeout))
         result = json.loads(msg[-1])
 
-        if result['error'] is None and result['tactic_state_id'] is None:
-            print('Repeating init_search...')
-            self._send_flush(f'["init_search", ["{decl}", ""]]\n')
-            msg.append(self._get_message(self.timeout))
-            result = json.loads(msg[-1])
+        # if result['error'] is None and result['tactic_state_id'] is None:
+        #     print('Repeating init_search...')
+        #     self._send_flush(f'["init_search", ["{decl}", ""]]\n')
+        #     msg.append(self._get_message(self.timeout))
+        #     result = json.loads(msg[-1])
 
         if result['error'] is None:
             search_id = int(result['search_id'])
@@ -71,7 +71,8 @@ class LeanInstance(threading.Thread):
                     }
                 },
                 'n_failed_tactics': 0,
-                'n_total_tactics': 0
+                'n_total_tactics': 0,
+                'failed_tactics': {}
             }
 
         return result
@@ -123,8 +124,13 @@ class LeanInstance(threading.Thread):
 
     def clear_search(self, search_id: int) -> dict:
         self._send_flush(f'["clear_search",["{search_id}"]]\n')
+        result = self.get_result()
         del self.proof_searchs[search_id]
-        return self.get_result()
+
+        if result['error'] is not None:
+            raise RuntimeError(result['error'])
+
+        return result
 
     def get_result(self, timeout: Optional[int] = None) -> dict:
         msg = self._get_message(timeout)
@@ -157,6 +163,7 @@ class LeanInstance(threading.Thread):
             self._hist.add((search_id, state_id_previous, tactic))
         else:
             self.proof_searchs[search_id]['n_failed_tactics'] += 1
+            self.proof_searchs[search_id]['failed_tactics'][tactic] = result['error']
         self.proof_searchs[search_id]['n_total_tactics'] += 1
 
     def _cached_result(self, search_id: int, state_id: int, tactic: int) -> dict:
@@ -171,8 +178,6 @@ class LeanInstance(threading.Thread):
             'tactic_state_id': id_next
         }
         return result
-
-
 
     def _send_flush(self, cmd: str) -> None:
         assert self._fin
@@ -205,5 +210,4 @@ class LeanInstance(threading.Thread):
             msg = self.message_queue.get(timeout=timeout)
             return msg
         except queue.Empty:
-            print("Command timed out!")
-            raise
+            raise queue.Empty("Command time out")
