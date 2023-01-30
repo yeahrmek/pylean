@@ -125,10 +125,21 @@ class LeanInstance(threading.Thread):
     def clear_search(self, search_id: int) -> dict:
         self._send_flush(f'["clear_search",["{search_id}"]]\n')
         result = self.get_result()
-        del self.proof_searchs[search_id]
+
+        n_msgs = 0
+        while (result['error'] is not None or
+               result['tactic_state'] is not None or
+               result['tactic_state_id'] is not None):
+            result = self.get_result(timeout=10)
+            n_msgs += 1
+        print(f'Collected {n_msgs}')
+        print(f"search_id: {search_id}")
+        print(result)
 
         if result['error'] is not None:
             raise RuntimeError(result['error'])
+
+        del self.proof_searchs[search_id]
 
         return result
 
