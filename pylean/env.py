@@ -22,6 +22,7 @@ class LeanEnv(LeanInstance, Env):
         timeout : int, default=120
             Timeout for lean commands execution
     """
+
     reward_range = (0.0, 1.0)
 
     def __init__(self, *args, decl: Optional[str] = None, **kwargs) -> None:
@@ -29,8 +30,8 @@ class LeanEnv(LeanInstance, Env):
         self._reset_params()
         self.decl = decl
 
-    def step(self,
-             action: Tuple[int, str]
+    def step(
+        self, action: Tuple[int, str]
     ) -> Tuple[Tuple[int, str], float, bool, dict]:
         """
         Run given tactic for a given search at given state
@@ -60,7 +61,8 @@ class LeanEnv(LeanInstance, Env):
         state_id, tactic = action
 
         observation, reward, done, info = self._observation_from_run_stmt(
-            self.search_id, state_id, tactic)
+            state_id, tactic
+        )
 
         return observation, reward, done, info
 
@@ -91,21 +93,23 @@ class LeanEnv(LeanInstance, Env):
         --------
 
         """
-        if (self.decl is None and options is None) or (options and not 'decl' in options):
-            raise ValueError('Declaration name is not provided.')
+        if (self.decl is None and options is None) or (
+            options and not "decl" in options
+        ):
+            raise ValueError("Declaration name is not provided.")
 
         if options:
             self._reset_params()
-            self.decl = options['decl']
+            self.decl = options["decl"]
 
         if self.search_id is None or self._init_obs[0] == -1:
             info = self.init_search(self.decl)
-            if info['error'] is None:
-                self._init_obs = (int(info['tactic_state_id']), info['tactic_state'])
-                self.search_id = int(info['search_id'])
+            if info["error"] is None:
+                self._init_obs = (int(info["tactic_state_id"]), info["tactic_state"])
+                self.search_id = int(info["search_id"])
                 self._init_info = info
             else:
-                self._init_obs = (-1, '')
+                self._init_obs = (-1, "")
                 self._init_info = info
 
         if return_info:
@@ -137,172 +141,20 @@ class LeanEnv(LeanInstance, Env):
         """
         self.search_id = None
         self.decl = None
-        self._init_obs = (-1, '')
+        self._init_obs = (-1, "")
         self._init_info = None
 
-    def _observation_from_run_stmt(self,
-        search_id: int,
-        state_id: int,
-        tactic: str
+    def _observation_from_run_stmt(
+        self, state_id: int, tactic: str
     ) -> Tuple[Tuple[int, str], float, bool, dict]:
-        info = super().run_stmt(search_id, state_id, tactic)
-        observation, reward, done = (-1, ''), 0, False
-        if info['error'] is None:
-            observation = (int(info['tactic_state_id']), info['tactic_state'])
-            reward = float(info['tactic_state'] == "no goals")
-            done = info['tactic_state'] == "no goals"
-        return observation, reward, done, info
-
-
-class VectorizedLeanEnv(LeanEnv):
-    def __init__(self, *args, decls_list: Optional[str] = None, **kwargs) -> None:
-        super().__init__(*args, **kwargs)
-        self._reset_params()
-        self.decls_list = decls_list
-
-    def step(
-        self,
-        actions_list: List[Tuple[int, int, str]]
-    ) -> Tuple[List[Tuple[int, int, str]], List[float], List[bool], List[dict]]:
-        """
-        Run given tactic for a given search at given state
-
-        Args:
-        -----
-            actions : List[Tuple[int, int, str]]
-                search_id, state id and tactic to apply for each statement.
-                List length should be equal to the length of the `decls_list`.
-                Note, that all search ids should be different.
-
-        Returns:
-        --------
-            observation : List[Tuple(int, str)]
-                New state id and its string represenation (new goals).
-                If tactic application fails it returns `[(-1, '')]`
-
-            reward : List[float]
-                0 - for incorrect tactic or if proof is not complete
-                1 - if no goals returned
-
-            done : List[bool]
-                End of proof flag
-
-            info : List[dict]
-                Dictionary with additional info
-                (error, search_id, tactic_state_id, tactic_state, proof_steps)
-        """
-        search_id_list, state_id_list, tactic_list = zip(*actions_list)
-
-        assert len(set(search_id_list)) == len(search_id_list), 'Duplicate search_ids found.'
-        assert all([s_id in self.search_id_list for s_id in search_id_list])
-
-        observations, rewards, dones, infos = [], [], [], []
-
-        run_indices = []
-        # check whether such action has already been performed
-        for i, (search_id, state_id, tactic) in enumerate(actions_list):
-            obs_cur, reward_cur, done_cur, info_cur = self._observation_from_cache(
-                search_id, state_id, tactic)
-            observations.append(obs_cur)
-            rewards.append(reward_cur)
-            dones.append(done_cur)
-            infos.append(info_cur)
-            if obs_cur is None:
-                run_indices.append(i)
-
-        run_search_ids = [search_id_list[i] for i in run_indices]
-        run_state_ids = [state_id_list[i] for i in run_indices]
-        run_tactics = [tactic_list[i] for i in run_indices]
-
-        output = self.run_batch(run_search_ids, run_state_ids, run_tactics)
-
-        for i, search_id in zip(run_indices, run_search_ids):
-            observations[i], rewards[i], dones[i] = (search_id, -1, ''), 0, False
-            infos[i] = output[search_id]
-            if infos[i]['error'] is None:
-                observations[i] = (search_id, int(infos[i]['tactic_state_id']), infos[i]['tactic_state'])
-                rewards[i] = float(infos[i]['tactic_state'] == "no goals")
-                dones[i] = infos[i]['tactic_state'] == "no goals"
-
-        return observations, rewards, dones, infos
-
-    def reset(
-        self,
-        *,
-        seed: Optional[int] = None,
-        return_info: bool = False,
-        options: Optional[dict] = None,
-    ) -> Union[str, Tuple[str, dict]]:
-        """
-        Returns initial observation
-
-        Args:
-        ----
-            seed : Optional[int], default=None
-                The seed that is used to initialize the environment.
-                Does not take effect in current evnironment
-
-            return_info : bool, default=False
-                If `True` --- additional dictionary with info will be returned
-
-            options : Optional[dict], default=None
-                Additional options to initialize environment with.
-                It should contain `decl` key with theorem declaration as a value
-
-        Returns:
-        --------
-
-        """
-        if (self.decls_list is None and options is None) or (options and not 'decls_list' in options):
-            raise ValueError('Declaration name is not provided.')
-
-        if options:
-            self._reset_params()
-            self.decls_list = options['decls_list']
-
-        if self.search_id_list is None or self._init_obs[0][0] == -1:
-            self.search_id_list = []
-            self._init_obs = []
-            self._init_info = []
-            for decl in self.decls_list:
-                info = self.init_search(decl)
-                if info['error'] is None:
-                    search_id = int(info['search_id'])
-                    self._init_obs.append((search_id, int(info['tactic_state_id']), info['tactic_state']))
-                    self.search_id_list.append(search_id)
-                    self._init_info.append(info)
-                else:
-                    self._init_obs.append((-1, -1, ''))
-                    self._init_info.append(info)
-                    self.search_id_list.append(None)
-
-        if return_info:
-            return self._init_obs, self._init_info
-        return self._init_obs
-
-    def clear_search(self):
-        """
-        Clear proof search state
-        """
-        decls_list = self.decls_list
-        [super(LeanEnv, self).clear_search(search_id) for search_id in self.search_id_list]
-        self._reset_params()
-        self.decls_list = decls_list
-
-    def _reset_params(self):
-        self.search_id_list = None
-        self.decls_list = None
-        self._init_obs = [(-1, -1, '')]
-        self._init_info = None
-
-    def _observation_from_cache(
-        self,
-        search_id: int,
-        state_id: int,
-        tactic: str
-    ) -> Tuple[Tuple[int, int, str], float, bool, dict]:
-        observation, reward, done, info = super()._observation_from_cache(
-            search_id, state_id, tactic)
-        if observation is not None:
-            observation = (search_id, *observation)
+        info = super().run_stmt(self.search_id, state_id, tactic)
+        if info["search_id"] is not None:
+            assert (
+                int(info["search_id"]) == self.search_id
+            ), f"Incorrect search id has been returned. Expected {self.search_id}, got {info['search_id']}"
+        observation, reward, done = (-1, ""), 0, False
+        if info["error"] is None:
+            observation = (int(info["tactic_state_id"]), info["tactic_state"])
+            reward = float(info["tactic_state"] == "no goals")
+            done = info["tactic_state"] == "no goals"
         return observation, reward, done, info
