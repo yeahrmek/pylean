@@ -1,9 +1,8 @@
-import threading
-import subprocess
-import queue
 import json
-
-from typing import Optional, List
+import queue
+import subprocess
+import threading
+from typing import List, Optional
 
 
 class LeanException(Exception):
@@ -140,6 +139,8 @@ class LeanInstance(threading.Thread):
             raise RuntimeError(result['error'])
 
         del self.proof_searchs[search_id]
+        print(f"Search_id {search_id} deleted successfully")
+        print(f"Current searches: {list(self.proof_searchs)}")
 
         return result
 

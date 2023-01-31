@@ -1,4 +1,4 @@
-from typing import Tuple, Optional, Union, List
+from typing import List, Optional, Tuple, Union
 
 from gym import Env
 
@@ -63,7 +63,6 @@ class LeanEnv(LeanInstance, Env):
             self.search_id, state_id, tactic)
 
         return observation, reward, done, info
-
 
     def reset(
         self,
