@@ -1,11 +1,9 @@
-from typing import List, Optional, Tuple, Union
-
-from gym import Env
+from typing import Optional, Tuple, Union
 
 from .lean import LeanInstance
 
 
-class LeanEnv(LeanInstance, Env):
+class LeanEnv(LeanInstance):
     """
     Lean environment for proving given theorem.
     It requires openai/lean-gym to be installed (https://github.com/openai/lean-gym)
@@ -59,10 +57,13 @@ class LeanEnv(LeanInstance, Env):
                 (error, search_id, tactic_state_id, tactic_state, proof_steps)
         """
         state_id, tactic = action
+        observation, reward, done = (-1, ""), 0, False
 
-        observation, reward, done, info = self._observation_from_run_stmt(
-            state_id, tactic
-        )
+        info = super().run_stmt(self.search_id, state_id, tactic)
+        if not self.is_error(info):
+            observation = (int(info["tactic_state_id"]), info["tactic_state"])
+            reward = float(info["tactic_state"] == "no goals")
+            done = info["tactic_state"] == "no goals"
 
         return observation, reward, done, info
 
@@ -143,18 +144,3 @@ class LeanEnv(LeanInstance, Env):
         self.decl = None
         self._init_obs = (-1, "")
         self._init_info = None
-
-    def _observation_from_run_stmt(
-        self, state_id: int, tactic: str
-    ) -> Tuple[Tuple[int, str], float, bool, dict]:
-        info = super().run_stmt(self.search_id, state_id, tactic)
-        if info["search_id"] is not None:
-            assert (
-                int(info["search_id"]) == self.search_id
-            ), f"Incorrect search id has been returned. Expected {self.search_id}, got {info['search_id']}"
-        observation, reward, done = (-1, ""), 0, False
-        if info["error"] is None:
-            observation = (int(info["tactic_state_id"]), info["tactic_state"])
-            reward = float(info["tactic_state"] == "no goals")
-            done = info["tactic_state"] == "no goals"
-        return observation, reward, done, info

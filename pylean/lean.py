@@ -2,7 +2,7 @@ import json
 import queue
 import subprocess
 import threading
-from typing import List, Optional
+from typing import Optional
 
 
 class LeanException(Exception):
@@ -52,7 +52,7 @@ class LeanInstance(threading.Thread):
             msg.append(self._get_message(self.timeout))
         result = json.loads(msg[-1])
 
-        if result["error"] is None:
+        if not self.is_error(result):
             search_id = int(result["search_id"])
             tactic_state_id = int(result["tactic_state_id"])
             self.proof_searchs[search_id] = {
@@ -83,38 +83,19 @@ class LeanInstance(threading.Thread):
 
     def clear_search(self, search_id: int) -> dict:
         self._send_flush(f'["clear_search",["{search_id}"]]\n')
-        result = self.get_result()
-
-        n_msgs = 0
-        while (
-            result["error"] is not None
-            or result["tactic_state"] is not None
-            or result["tactic_state_id"] is not None
-        ):
-            if result['search_id'] is not None:
-                assert result['search_id'] == str(search_id), f"{result['search_id']}, {search_id}"
-            result = self.get_result(timeout=10)
-            n_msgs += 1
-        print(f"Collected {n_msgs}")
-        print(f"search_id: {search_id}")
-        print(result)
-
-        if result["error"] is not None:
-            raise RuntimeError(result["error"])
+        result = self.get_result(timeout=1)
 
         del self.proof_searchs[search_id]
-        print(f"Search_id {search_id} deleted successfully")
-        print(f"Current search ids: {list(self.proof_searchs)}")
+        if self.is_error(result):
+            print(bcolors.WARNING + result['error'] + bcolors.ENDC)
+            raise RuntimeError(result['error'])
 
         return result
-
-    def get_result(self, timeout: Optional[int] = None) -> dict:
-        return json.loads(self._get_message(timeout))
 
     def update_proof_search(
         self, search_id: int, state_id_previous: int, tactic: str, result: dict
     ) -> None:
-        if result["error"] is None:
+        if not self.is_error(result):
             state_id = int(result["tactic_state_id"])
 
             states = self.proof_searchs[search_id]["states"]
@@ -159,10 +140,73 @@ class LeanInstance(threading.Thread):
         self._proc.kill()
         self.__sema.release()
 
-    def _get_message(self, timeout: float) -> str:
+    def get_result(self, timeout: Optional[float] = None) -> str:
+        timeout = timeout if timeout else self.timeout
+        return json.loads(self._get_message(timeout=timeout))
+
+    def _get_message(self, timeout: Optional[float] = None) -> str:
         timeout = timeout if timeout else self.timeout
         try:
             msg = self.message_queue.get(timeout=timeout)
             return msg
         except queue.Empty:
             raise queue.Empty("Command time out")
+
+    def is_error(self, result):
+        return result['error'] is not None
+
+
+class bcolors:
+    HEADER = '\033[95m'
+    OKBLUE = '\033[94m'
+    OKCYAN = '\033[96m'
+    OKGREEN = '\033[92m'
+    WARNING = '\033[93m'
+    FAIL = '\033[91m'
+    ENDC = '\033[0m'
+    BOLD = '\033[1m'
+    UNDERLINE = '\033[4m'
+
+
+# def validate_proof_search(lean, search_id):
+#     from copy import deepcopy
+
+#     assert len(lean.proof_searchs) == 1
+#     proof_search = deepcopy(lean.proof_searchs[search_id])
+#     for state_id, state in proof_search['states'].items():
+#         for tac, next_state_id in state['tactic_to_next_id'].items():
+#             res = lean.run_stmt(search_id, state_id, tac)
+#             if (res['tactic_state'] != proof_search['states'][next_state_id]['state']
+#                 and not (res['tactic_state'] is not None
+#                          and '_fresh_' in res['tactic_state']
+#                          and '_fresh_' in proof_search['states'][next_state_id]['state'])
+#             ):
+#                 print(tac)
+#                 print(res)
+#                 tactics, ids = get_proof_branch(proof_search, next_state_id)
+#                 lean2 = LeanInstance(lean_gym_path=lean.lean_gym_path)
+#                 lean2.init_search(lean.decl)
+#                 i = 0
+#                 res2 = []
+#                 for t in tactics:
+#                     res2.append(lean2.run_stmt(0, i, t))
+#                     if res2[-1]['tactic_state_id'] is not None:
+#                         i = int(res2[-1]['tactic_state_id'])
+#                     else:
+#                         breakpoint()
+#                         print('sapog')
+#                 breakpoint()
+
+
+# def get_proof_branch(proof_search, last_state_id):
+
+#     tactics = []
+#     ids = []
+#     while proof_search['states'][last_state_id]['id_prev']:
+#         id_prev = proof_search['states'][last_state_id]['id_prev'][0]
+#         tac, i = zip(*[(tac, i) for tac, i in proof_search['states'][id_prev]['tactic_to_next_id'].items() if i == last_state_id])
+#         tactics.append(tac[0])
+#         ids.append(i[0])
+#         last_state_id = id_prev
+
+#     return tactics[::-1], ids[::-1]
