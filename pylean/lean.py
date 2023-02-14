@@ -38,6 +38,7 @@ class LeanInstance(threading.Thread):
         # Set up the message queue, which we'll populate with the
         # messages from lean-gym.
         self.message_queue = queue.Queue()
+        self._last_flash_cmd = None
 
         # Start the message queue thread
         self.start()
@@ -117,11 +118,12 @@ class LeanInstance(threading.Thread):
 
     def _send_flush(self, cmd: str) -> None:
         assert self._fin
+        self._last_flash_cmd = cmd
         try:
             self._fin.write(cmd.encode("utf-8"))
             self._fin.flush()
         except BrokenPipeError:
-            raise LeanException("Lean process unexpectedly quit.")
+            raise LeanException(f"Lean process unexpectedly quit. Last cmd: {cmd}")
 
     def run(self) -> None:
         assert self._fout
@@ -150,7 +152,7 @@ class LeanInstance(threading.Thread):
             msg = self.message_queue.get(timeout=timeout)
             return msg
         except queue.Empty:
-            raise queue.Empty("Command time out")
+            raise queue.Empty(f"Command time out. Last cmd: {self._last_flash_cmd}")
 
     def is_error(self, result):
         return result['error'] is not None
