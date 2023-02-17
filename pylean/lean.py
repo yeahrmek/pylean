@@ -152,7 +152,7 @@ class LeanInstance(threading.Thread):
             msg = self.message_queue.get(timeout=timeout)
             return msg
         except queue.Empty:
-            raise queue.Empty(f"Command time out. Last cmd: {self._last_flash_cmd}")
+            raise queue.Empty(f"Command time out. Last cmd: {self._last_flash_cmd}, timeout={timeout}")
 
     def is_error(self, result):
         return result['error'] is not None
