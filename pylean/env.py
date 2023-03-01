@@ -3,6 +3,31 @@ from typing import Optional, Tuple, Union
 from .lean import LeanInstance
 
 
+class ProofState:
+    def __init__(
+        self,
+        state: Optional[str] = None,
+        state_id: Optional[str] = None,
+        score: Optional[float] = None,
+    ):
+        self.state = state
+        self.id = state_id
+        self.score = score
+
+    def __repr__(self) -> str:
+        score = float("-inf") if self.score is None else self.score
+        return f"state_id: {self.id}\nstate: {self.state}\nscore: {score:.3f}"
+
+
+class Action:
+    def __init__(self, state_id: Optional[str] = None, tactic: Optional[str] = None):
+        self.state_id = state_id
+        self.tactic = tactic
+
+    def __repr__(self) -> str:
+        return f"state_id: {self.state_id}\ntactic: {self.tactic}"
+
+
 class LeanEnv(LeanInstance):
     """
     Lean environment for proving given theorem.
@@ -21,16 +46,12 @@ class LeanEnv(LeanInstance):
             Timeout for lean commands execution
     """
 
-    reward_range = (0.0, 1.0)
-
     def __init__(self, *args, decl: Optional[str] = None, **kwargs) -> None:
         super().__init__(*args, **kwargs)
         self._reset_params()
         self.decl = decl
 
-    def step(
-        self, action: Tuple[int, str]
-    ) -> Tuple[Tuple[int, str], float, bool, dict]:
+    def step(self, action: Action) -> Tuple[ProofState, float, bool, dict]:
         """
         Run given tactic for a given search at given state
 
@@ -56,12 +77,11 @@ class LeanEnv(LeanInstance):
                 Dictionary with additional info
                 (error, search_id, tactic_state_id, tactic_state, proof_steps)
         """
-        state_id, tactic = action
-        observation, reward, done = (-1, ""), 0, False
+        observation, reward, done = ProofState(), 0, False
 
-        info = super().run_stmt(self.search_id, state_id, tactic)
+        info = super().run_stmt(self.search_id, action.state_id, action.tactic)
         if not self.is_error(info):
-            observation = (int(info["tactic_state_id"]), info["tactic_state"])
+            observation = ProofState(info["tactic_state"], info["tactic_state_id"])
             reward = float(info["tactic_state"] == "no goals")
             done = info["tactic_state"] == "no goals"
 
@@ -103,28 +123,28 @@ class LeanEnv(LeanInstance):
             self._reset_params()
             self.decl = options["decl"]
 
-        if self.search_id is None or self._init_obs[0] == -1:
+        if self.search_id is None or self._init_obs.state_id is None:
             info = self.init_search(self.decl)
+            self._init_info = info
+            self._init_obs = ProofState()
             if info["error"] is None:
-                self._init_obs = (int(info["tactic_state_id"]), info["tactic_state"])
-                self.search_id = int(info["search_id"])
-                self._init_info = info
-            else:
-                self._init_obs = (-1, "")
-                self._init_info = info
+                self._init_obs = ProofState(
+                    info["tactic_state"], info["tactic_state_id"]
+                )
+                self.search_id = info["search_id"]
 
         if return_info:
             return self._init_obs, self._init_info
         return self._init_obs
 
-    def close(self):
+    def close(self) -> None:
         """
         Perform any necessary cleanup
         """
         self._reset_params()
         self.kill()
 
-    def clear_search(self):
+    def clear_search(self) -> dict:
         """
         Clear proof search state
         """
@@ -136,11 +156,11 @@ class LeanEnv(LeanInstance):
         self.decl = decl
         return out
 
-    def _reset_params(self):
+    def _reset_params(self) -> None:
         """
         Reset some internal parameters to empty values
         """
         self.search_id = None
         self.decl = None
-        self._init_obs = (-1, "")
+        self._init_obs = ProofState()
         self._init_info = None

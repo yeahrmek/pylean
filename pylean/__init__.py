@@ -1,2 +1,2 @@
 from .lean import LeanInstance, LeanException
-from .env import LeanEnv
+from .env import LeanEnv, ProofState, Action

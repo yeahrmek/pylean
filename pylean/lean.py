@@ -54,8 +54,8 @@ class LeanInstance(threading.Thread):
         result = json.loads(msg[-1])
 
         if not self.is_error(result):
-            search_id = int(result["search_id"])
-            tactic_state_id = int(result["tactic_state_id"])
+            search_id = result["search_id"]
+            tactic_state_id = result["tactic_state_id"]
             self.proof_searchs[search_id] = {
                 "decl": decl,
                 "states": {
@@ -72,7 +72,7 @@ class LeanInstance(threading.Thread):
 
         return result
 
-    def run_stmt(self, search_id: int, state_id: int, tactic: str) -> dict:
+    def run_stmt(self, search_id: str, state_id: str, tactic: str) -> dict:
         """
         Run given tactic for a given search at given state
         """
@@ -82,7 +82,7 @@ class LeanInstance(threading.Thread):
         self.update_proof_search(search_id, state_id, tactic, results)
         return results
 
-    def clear_search(self, search_id: int) -> dict:
+    def clear_search(self, search_id: str) -> dict:
         self._send_flush(f'["clear_search",["{search_id}"]]\n')
         result = self.get_result(timeout=1)
 
@@ -94,10 +94,10 @@ class LeanInstance(threading.Thread):
         return result
 
     def update_proof_search(
-        self, search_id: int, state_id_previous: int, tactic: str, result: dict
+        self, search_id: str, state_id_previous: str, tactic: str, result: dict
     ) -> None:
         if not self.is_error(result):
-            state_id = int(result["tactic_state_id"])
+            state_id = result["tactic_state_id"]
 
             states = self.proof_searchs[search_id]["states"]
 
