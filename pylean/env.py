@@ -15,7 +15,7 @@ class ProofState:
         self.score = score
 
     def __repr__(self) -> str:
-        return f"state_id: {self.id}\nstate: {self.state}\nscore: {score:.3f}"
+        return f"state_id: {self.id}\nstate: {self.state}\nscore: {self.score:.3f}"
 
 
 class Action:
@@ -30,7 +30,7 @@ class Action:
         self.score = score
 
     def __repr__(self) -> str:
-        return f"state_id: {self.state_id}\ntactic: {self.tactic}\nscore: {score:.3f}"
+        return f"state_id: {self.state_id}\ntactic: {self.tactic}\nscore: {self.score:.3f}"
 
 
 class LeanEnv(LeanInstance):
