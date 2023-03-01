@@ -20,12 +20,14 @@ class ProofState:
 
 
 class Action:
-    def __init__(self, state_id: Optional[str] = None, tactic: Optional[str] = None):
+    def __init__(self, state_id: Optional[str] = None, tactic: Optional[str] = None, score: Optional[float] = None):
         self.state_id = state_id
         self.tactic = tactic
+        self.score = score
 
     def __repr__(self) -> str:
-        return f"state_id: {self.state_id}\ntactic: {self.tactic}"
+        score = float('-inf') if self.score is None else self.score
+        return f"state_id: {self.state_id}\ntactic: {self.tactic}\nscore: {score:.3f}"
 
 
 class LeanEnv(LeanInstance):
