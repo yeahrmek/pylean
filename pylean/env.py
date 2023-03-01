@@ -8,25 +8,28 @@ class ProofState:
         self,
         state: Optional[str] = None,
         state_id: Optional[str] = None,
-        score: Optional[float] = None,
+        score: Optional[float] = float('-inf'),
     ):
         self.state = state
         self.id = state_id
         self.score = score
 
     def __repr__(self) -> str:
-        score = float("-inf") if self.score is None else self.score
         return f"state_id: {self.id}\nstate: {self.state}\nscore: {score:.3f}"
 
 
 class Action:
-    def __init__(self, state_id: Optional[str] = None, tactic: Optional[str] = None, score: Optional[float] = None):
+    def __init__(
+        self,
+        state_id: Optional[str] = None,
+        tactic: Optional[str] = None,
+        score: Optional[float] = float('-inf'),
+    ):
         self.state_id = state_id
         self.tactic = tactic
         self.score = score
 
     def __repr__(self) -> str:
-        score = float('-inf') if self.score is None else self.score
         return f"state_id: {self.state_id}\ntactic: {self.tactic}\nscore: {score:.3f}"
 
 
