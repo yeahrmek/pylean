@@ -7,8 +7,8 @@ from .lean import LeanInstance
 class ProofState:
     def __init__(
         self,
-        state: Optional[str] = None,
-        state_id: Optional[str] = None,
+        state: Optional[str] = 'null',
+        state_id: Optional[str] = 'null',
         score: Optional[float] = float("-inf"),
     ):
         self.state = state
@@ -16,7 +16,7 @@ class ProofState:
         self.score = score
 
     def __repr__(self) -> str:
-        return f"state_id: {self.id}\nstate: {self.state}\nscore: {self.score:.3f}"
+        return repr(self.as_dict())
 
     def as_dict(self) -> dict:
         return {"state": self.state, "id": self.id, "score": self.score}
@@ -28,8 +28,8 @@ class ProofState:
 class Action:
     def __init__(
         self,
-        state_id: Optional[str] = None,
-        tactic: Optional[str] = None,
+        state_id: Optional[str] = 'null',
+        tactic: Optional[str] = 'null',
         score: Optional[float] = float("-inf"),
     ):
         self.state_id = state_id
@@ -37,15 +37,13 @@ class Action:
         self.score = score
 
     def __repr__(self) -> str:
-        return (
-            f"state_id: {self.state_id}\ntactic: {self.tactic}\nscore: {self.score:.3f}"
-        )
+        return repr(self.as_dict())
 
     def as_dict(self) -> dict:
         return {"state_id": self.state_id, "tactic": self.tactic, "score": self.score}
 
     def as_json(self) -> str:
-        return json.dumps(sef.as_dict())
+        return json.dumps(self.as_dict())
 
 
 class LeanEnv(LeanInstance):
