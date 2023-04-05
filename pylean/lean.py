@@ -33,8 +33,6 @@ class LeanInstance(threading.Thread):
         self._fout = self._proc.stdout
         self._fin = self._proc.stdin
 
-        self.proof_searchs = {}  # search_id -> dict(state_id -> proof_context)
-
         # Set up the message queue, which we'll populate with the
         # messages from lean-gym.
         self.message_queue = queue.Queue()
@@ -56,19 +54,6 @@ class LeanInstance(threading.Thread):
         if not self.is_error(result):
             search_id = result["search_id"]
             tactic_state_id = result["tactic_state_id"]
-            self.proof_searchs[search_id] = {
-                "decl": decl,
-                "states": {
-                    tactic_state_id: {
-                        "id_prev": [],
-                        "state": result["tactic_state"],
-                        "tactic_to_next_id": {},
-                    }
-                },
-                "n_failed_tactics": 0,
-                "n_total_tactics": 0,
-                "failed_tactics": {},
-            }
 
         return result
 
@@ -79,42 +64,17 @@ class LeanInstance(threading.Thread):
         cmd = f'["run_tac",["{search_id}","{state_id}","{tactic}"]]\n'
         self._send_flush(cmd)
         results = self.get_result()
-        self.update_proof_search(search_id, state_id, tactic, results)
         return results
 
     def clear_search(self, search_id: str) -> dict:
         self._send_flush(f'["clear_search",["{search_id}"]]\n')
         result = self.get_result(timeout=1)
 
-        del self.proof_searchs[search_id]
         if self.is_error(result):
             print(bcolors.WARNING + result['error'] + bcolors.ENDC)
             raise RuntimeError(result['error'])
 
         return result
-
-    def update_proof_search(
-        self, search_id: str, state_id_previous: str, tactic: str, result: dict
-    ) -> None:
-        if not self.is_error(result):
-            state_id = result["tactic_state_id"]
-
-            states = self.proof_searchs[search_id]["states"]
-
-            states[state_id_previous]["tactic_to_next_id"][tactic] = state_id
-
-            if not state_id in states:
-                states[state_id] = {
-                    "id_prev": [state_id_previous],
-                    "tactic_to_next_id": {},
-                }
-            else:
-                states[state_id]["id_prev"].append(state_id_previous)
-            states[state_id]["state"] = result["tactic_state"]
-        else:
-            self.proof_searchs[search_id]["n_failed_tactics"] += 1
-            self.proof_searchs[search_id]["failed_tactics"][tactic] = result["error"]
-        self.proof_searchs[search_id]["n_total_tactics"] += 1
 
     def _send_flush(self, cmd: str) -> None:
         assert self._fin
